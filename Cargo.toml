@@ -1,0 +1,22 @@
+[package]
+name = "surreal-migration-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = { version = "1.10.6" }
+surrealdb = "2.0.1"
+tokio = { version = "1.40.0", features = [
+    "sync",
+    "time",
+    "macros",
+    "rt-multi-thread",
+] }
+anyhow = "1"
+clap = { version = "4.5.17", features = ["derive"] }
+
+[profile.bench]
+debug = true
+
+[profile.release]
+debug = true
