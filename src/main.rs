@@ -8,6 +8,7 @@ use std::{
 
 use regex::Regex;
 use surrealdb::{
+    engine::proto::Status,
     engine::remote::ws::{Client, Ws},
     opt::{auth::Root, QueryStream},
     sql::Thing,
@@ -62,6 +63,8 @@ async fn main() -> Result<()> {
     // example : main.rs <filename> --address <address> --port <port>
     let args = Args::parse();
 
+    println!("arg: {:#?}", args);
+
     // open file to file buffer
     let file = File::open(args.file)?;
     let buf_reader = BufReader::new(file);
@@ -71,11 +74,18 @@ async fn main() -> Result<()> {
     let mut command_count = 0;
     let mut line_count = 0;
     let start_pattern = Regex::new(r"^\s+(UPDATE|UPSERT|CREATE|INSERT)").unwrap();
-    let end_pattern = Regex::new(r";$").unwrap();
+    let end_pattern = Regex::new(r"\};$").unwrap();
 
     let mut error_set: Vec<(i32, i32, String, String)> = Vec::new();
 
-    let db_cli = Surreal::new::<Ws>(args.address).await?;
+    let temp_cli = Surreal::new::<Ws>(args.address).await;
+    if temp_cli.is_err() {
+        println!("Error: {:?}", temp_cli.err());
+        // return Err(temp_cli.err().unwrap());
+        return Ok(());
+    }
+
+    let db_cli = temp_cli.ok().unwrap();
     db_cli
         .signin(Root {
             username: &args.username,
@@ -90,7 +100,7 @@ async fn main() -> Result<()> {
         }
         line_count += 1;
         let line = line_result.unwrap();
-        if start_pattern.is_match(&line) {
+        if start_pattern.is_match(&line) && !in_command {
             commad_line = line.clone();
             commad_line.push_str("\n");
             in_command = true;
@@ -131,9 +141,10 @@ async fn main() -> Result<()> {
 async fn run_query(db_cli: &Surreal<Client>, query_str: &str) -> surrealdb::Result<()> {
     let result = db_cli.query(query_str).await;
     match result {
-        Ok(_) => {
-            // println!("result: {:?}", result);
-        }
+        // Ok(_) => {
+        //     // println!("result: {:?}", result);
+        // }
+        Ok(_) => {}
         Err(e) => {
             println!("error: {:?}", e);
             return Err(e);
@@ -147,10 +158,12 @@ fn write_error_log(error_set: Vec<(i32, i32, String, String)>) -> Result<()> {
     let mut log_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .append(true)
         .open("error.log")?;
     let mut quury_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .append(true)
         .open("fail_run.surql")?;
 
     // let mut file = File::open("error.log")?;
